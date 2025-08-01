@@ -51,7 +51,6 @@ linters:
     - paralleltest
     - perfsprint
     - revive
-    - wrapcheck
     - wsl
   settings:
     decorder:
