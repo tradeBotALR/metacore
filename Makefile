@@ -35,3 +35,6 @@ deps:
 
 # Полная проверка
 check: deps lint test
+
+dep:
+	go run ./postgres/cmd/ -db-url="postgres://postgres:postgres@localhost:5432/mexc_bot_db?sslmode=disable"
