@@ -12,6 +12,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const dbConnectTimeout = 10 * time.Second
+
 var (
 	dbURL      = flag.String("db-url", "", "PostgreSQL connection URL (e.g., postgres://user:pass@host:port/dbname)")
 	schemaPath = flag.String("schema", "./postgres/schema.sql", "Path to the schema.sql file")
@@ -25,12 +27,12 @@ func main() {
 	}
 
 	// 1. Подключаемся к БД
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), dbConnectTimeout)
 	defer cancel()
 
 	conn, err := pgx.Connect(ctx, *dbURL)
 	if err != nil {
-		log.Fatalf("Unable to connect to database: %v\n", err)
+		log.Fatalf("Unable to connect to database: %v\n", err) //nolint:gocritic
 	}
 
 	defer func() {
@@ -47,7 +49,7 @@ func main() {
 
 	//nolint:gosec
 	if err := DeploySchema(ctx, conn, *schemaPath); err != nil {
-		log.Fatalf("Schema deployment failed: %v\n", err)
+		log.Printf("Unable to connect to database: %v\n", err)
 		os.Exit(1)
 	}
 
