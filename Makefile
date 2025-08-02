@@ -1,6 +1,18 @@
 # Makefile
 .PHONY: lint lint-security lint-critic test build clean deps fix
 
+.PHONY: mock-gen
+mock-gen:
+	@echo "Generating mocks..."
+	mockgen -destination=storage/mocks/full_storage_mock.go -package=mocks metacore/storage FullStorage
+	@echo "Mocks generated successfully."
+
+.PHONY: mock-gen-pgx
+mock-gen-pgx:
+	@echo "Generating pgxpool mocks..."
+	mockgen -destination=storage/mocks/pgxpool_iface_mock.go -package=mocks metacore/storage PgxPoolIface
+	@echo "PGX Pool mocks generated successfully."
+
 # Основной линтинг
 lint:
 	golangci-lint run ./...

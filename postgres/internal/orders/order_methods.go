@@ -5,24 +5,23 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"metacore/domain"
 	"metacore/postgres/postgreserr"
 	"metacore/storage"
 )
 
-// Storage реализует интерфейс DBStorage.
-type Storage struct {
-	db *pgxpool.Pool
+// OrderStorage реализует интерфейс FullStorage.
+type OrderStorage struct {
+	db storage.PgxPoolIface
 }
 
-// NewStorage создает новый экземпляр Storage.
-func NewStorage(db *pgxpool.Pool) *Storage {
-	return &Storage{db: db}
+// NewOrderStorage создает новый экземпляр OrderStorage.
+func NewOrderStorage(db storage.PgxPoolIface) *OrderStorage {
+	return &OrderStorage{db: db}
 }
 
 // CreateOrder сохраняет новый ордер в хранилище.
-func (s *Storage) CreateOrder(ctx context.Context, order *domain.Order) error {
+func (s *OrderStorage) CreateOrder(ctx context.Context, order *domain.Order) error {
 	query := `
         INSERT INTO orders (
             internal_id, user_id, mexc_order_id, symbol, side, type, status,
@@ -57,7 +56,7 @@ func (s *Storage) CreateOrder(ctx context.Context, order *domain.Order) error {
 }
 
 // DeleteOrderByID удаляет ордер из хранилища по его mexc_order_id.
-func (s *Storage) DeleteOrderByID(ctx context.Context, mexcOrderID string) error {
+func (s *OrderStorage) DeleteOrderByID(ctx context.Context, mexcOrderID string) error {
 	query := `DELETE FROM orders WHERE mexc_order_id = $1`
 
 	result, err := s.db.Exec(ctx, query, mexcOrderID)
@@ -75,7 +74,7 @@ func (s *Storage) DeleteOrderByID(ctx context.Context, mexcOrderID string) error
 }
 
 // UpdateOrderStatus обновляет статус ордера.
-func (s *Storage) UpdateOrderStatus(ctx context.Context, mexcOrderID, status string) error {
+func (s *OrderStorage) UpdateOrderStatus(ctx context.Context, mexcOrderID, status string) error {
 	query := `UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE mexc_order_id = $2`
 
 	result, err := s.db.Exec(ctx, query, status, mexcOrderID)
@@ -91,7 +90,7 @@ func (s *Storage) UpdateOrderStatus(ctx context.Context, mexcOrderID, status str
 }
 
 // GetOrderByID получает ордер по его mexc_order_id.
-func (s *Storage) GetOrderByID(ctx context.Context, mexcOrderID string) (*domain.Order, error) {
+func (s *OrderStorage) GetOrderByID(ctx context.Context, mexcOrderID string) (*domain.Order, error) {
 	query := `
         SELECT id, internal_id, user_id, mexc_order_id, symbol, side, type, status,
                price, quantity, quote_order_qty, executed_quantity,
@@ -133,11 +132,11 @@ func (s *Storage) GetOrderByID(ctx context.Context, mexcOrderID string) (*domain
 }
 
 // Close закрывает соединение с БД.
-func (s *Storage) Close() {
+func (s *OrderStorage) Close() {
 	if s.db != nil {
 		s.db.Close()
 	}
 }
 
-// Ensure Storage implements DBStorage interface
-var _ storage.DBStorage = (*Storage)(nil)
+// Ensure OrderStorage implements FullStorage interface
+var _ storage.FullStorage = (*OrderStorage)(nil)
