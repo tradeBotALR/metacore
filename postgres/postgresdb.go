@@ -6,11 +6,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"log"
 	"metacore/configs"
+	"metacore/storage"
 )
 
 // DB represents a connection pool to the PostgreSQL database
 type DB struct {
-	pool *pgxpool.Pool
+	pool storage.PgxPoolIface
+	storage.OrderStorage
 }
 
 // NewPostgresDB creates a new PostgreSQL connection pool
@@ -56,19 +58,24 @@ func NewPostgresDB(cfg configs.Config) (*DB, error) {
 
 // Pool возвращает внутренний пул соединений.
 // Используется для передачи в слои хранения (storage).
-func (db *DB) Pool() *pgxpool.Pool {
+func (db *DB) Pool() storage.PgxPoolIface { // <-- Возвращаем интерфейс
 	return db.pool
 }
 
-// Close closes the database connection pool
+// Close закрывает соединение.
 func (db *DB) Close() {
-	if db.pool != nil {
-		db.pool.Close()
-		log.Println("PostgreSQL connection pool closed")
+	if p, ok := db.pool.(interface{ Close() }); ok {
+		p.Close() // Вызываем Close, если тип его имеет (например, *pgxpool.Pool)
+	} else {
+		log.Println("Pool does not support Close method")
 	}
 }
 
-// Ping checks the database connection
+// Ping проверяет соединение.
 func (db *DB) Ping(ctx context.Context) error {
-	return db.pool.Ping(ctx)
+	if p, ok := db.pool.(interface{ Ping(context.Context) error }); ok {
+		return p.Ping(ctx)
+	}
+	return fmt.Errorf("pool does not support Ping")
+	//return db.pool.(interface{ Ping(context.Context) error }).Ping(ctx)
 }
