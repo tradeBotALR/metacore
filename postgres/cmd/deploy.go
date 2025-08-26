@@ -3,13 +3,14 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	_ "github.com/lib/pq"
 )
 
 const dbConnectTimeout = 10 * time.Second
@@ -30,33 +31,33 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), dbConnectTimeout)
 	defer cancel()
 
-	conn, err := pgx.Connect(ctx, *dbURL)
+	db, err := sql.Open("postgres", *dbURL)
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err) //nolint:gocritic
 	}
 
 	defer func() {
-		if closeErr := conn.Close(ctx); closeErr != nil {
+		if closeErr := db.Close(); closeErr != nil {
 			log.Printf("Warning: error closing database connection: %v", closeErr)
 		}
 	}()
 
-	if err := conn.Ping(ctx); err != nil {
+	if err := db.PingContext(ctx); err != nil {
 		log.Fatalf("Database ping failed: %v\n", err)
 	}
 
 	fmt.Println("Connected to the database successfully.")
 
 	//nolint:gosec
-	if err := DeploySchema(ctx, conn, *schemaPath); err != nil {
-		log.Printf("Unable to connect to database: %v\n", err)
+	if err := DeploySchema(ctx, db, *schemaPath); err != nil {
+		log.Printf("Unable to deploy schema: %v\n", err)
 		os.Exit(1)
 	}
 
 	fmt.Println("Deployment completed.")
 }
 
-func DeploySchema(ctx context.Context, conn *pgx.Conn, schemaPath string) error {
+func DeploySchema(ctx context.Context, db *sql.DB, schemaPath string) error {
 	//nolint:gosec
 	sqlBytes, err := os.ReadFile(schemaPath)
 	if err != nil {
@@ -65,7 +66,7 @@ func DeploySchema(ctx context.Context, conn *pgx.Conn, schemaPath string) error 
 
 	sql := string(sqlBytes)
 
-	_, err = conn.Exec(ctx, sql)
+	_, err = db.ExecContext(ctx, sql)
 	if err != nil {
 		return fmt.Errorf("failed to execute schema: %w", err)
 	}

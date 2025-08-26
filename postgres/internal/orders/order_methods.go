@@ -2,21 +2,21 @@ package orders
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"metacore/domain"
 	"metacore/postgres/postgreserr"
 	"metacore/storage"
 )
 
-// OrderStorage реализует интерфейс FullStorage.
+// OrderStorage реализует интерфейс OrderStorage.
 type OrderStorage struct {
-	db storage.PgxPoolIface
+	db storage.DBInterface
 }
 
 // NewOrderStorage создает новый экземпляр OrderStorage.
-func NewOrderStorage(db storage.PgxPoolIface) *OrderStorage {
+func NewOrderStorage(db storage.DBInterface) *OrderStorage {
 	return &OrderStorage{db: db}
 }
 
@@ -31,7 +31,7 @@ func (s *OrderStorage) CreateOrder(ctx context.Context, order *domain.Order) err
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
         )`
 
-	_, err := s.db.Exec(ctx, query,
+	_, err := s.db.ExecContext(ctx, query,
 		order.InternalID,
 		order.UserID,
 		order.MexcOrderID,
@@ -59,13 +59,18 @@ func (s *OrderStorage) CreateOrder(ctx context.Context, order *domain.Order) err
 func (s *OrderStorage) DeleteOrderByID(ctx context.Context, mexcOrderID string) error {
 	query := `DELETE FROM orders WHERE mexc_order_id = $1`
 
-	result, err := s.db.Exec(ctx, query, mexcOrderID)
+	result, err := s.db.ExecContext(ctx, query, mexcOrderID)
 	if err != nil {
 		return fmt.Errorf("failed to delete order: %w", err)
 	}
 
 	// Проверка, была ли удалена хотя бы одна строка
-	if result.RowsAffected() == 0 {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
 		// Можно вернуть кастомную ошибку, если это важно
 		return fmt.Errorf("order with id %s not found: %w", mexcOrderID, postgreserr.ErrOrderNotFound)
 	}
@@ -77,12 +82,17 @@ func (s *OrderStorage) DeleteOrderByID(ctx context.Context, mexcOrderID string) 
 func (s *OrderStorage) UpdateOrderStatus(ctx context.Context, mexcOrderID, status string) error {
 	query := `UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE mexc_order_id = $2`
 
-	result, err := s.db.Exec(ctx, query, status, mexcOrderID)
+	result, err := s.db.ExecContext(ctx, query, status, mexcOrderID)
 	if err != nil {
 		return fmt.Errorf("failed to update order status: %w", err)
 	}
 
-	if result.RowsAffected() == 0 {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
 		return fmt.Errorf("order with id %s not found: %w", mexcOrderID, postgreserr.ErrOrderNotFound)
 	}
 
@@ -100,7 +110,7 @@ func (s *OrderStorage) GetOrderByID(ctx context.Context, mexcOrderID string) (*d
 
 	var order domain.Order
 
-	err := s.db.QueryRow(ctx, query, mexcOrderID).Scan(
+	err := s.db.QueryRowContext(ctx, query, mexcOrderID).Scan(
 		&order.ID,
 		&order.InternalID,
 		&order.UserID,
@@ -120,7 +130,7 @@ func (s *OrderStorage) GetOrderByID(ctx context.Context, mexcOrderID string) (*d
 		&order.UpdatedAt,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			// Можно вернуть кастомную ошибку
 			return nil, fmt.Errorf("order with id %s not found: %w", mexcOrderID, postgreserr.ErrOrderNotFound)
 		}
@@ -138,5 +148,5 @@ func (s *OrderStorage) Close() {
 	}
 }
 
-// Ensure OrderStorage implements FullStorage interface
-var _ storage.FullStorage = (*OrderStorage)(nil)
+// Ensure OrderStorage implements OrderStorage interface
+var _ storage.OrderStorage = (*OrderStorage)(nil)
