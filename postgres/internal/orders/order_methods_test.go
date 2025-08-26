@@ -2,304 +2,320 @@ package orders
 
 import (
 	"context"
-	"github.com/golang/mock/gomock"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/pashagolub/pgxmock/v2"
-	"github.com/shopspring/decimal"
-	"github.com/stretchr/testify/assert"
-	"metacore/domain"
-	"metacore/storage"
-	"metacore/storage/mocks"
+	"database/sql"
+	"errors"
 	"testing"
 	"time"
+
+	"metacore/domain"
+	"metacore/postgres/postgreserr"
+	"metacore/storage/mocks"
+
+	"github.com/golang/mock/gomock"
+	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
-var store storage.FullStorage
-
-func TestStorage_CreateOrder(t *testing.T) {
-	// 1. Создаем контроллер для gomock
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish() // Убедимся, что все ожидания будут проверены
-
-	// 2. Создаем мок пула
-	mockPool := mocks.NewMockPgxPoolIface(ctrl)
-
-	// 3. Создаем экземпляр нашего хранилища с моком
-	s := NewOrderStorage(mockPool)
-
-	// 4. Подготавливаем тестовые данные
-	ctx := context.Background()
-	testOrder := &domain.Order{
-		InternalID:          1001,
-		UserID:              123,
-		MexcOrderID:         "test_mexc_order_id_123",
-		Symbol:              "BTCUSDT",
-		Side:                "BUY",
-		Type:                "LIMIT",
-		Status:              "NEW",
-		Price:               decimal.RequireFromString("50000.0"),
-		Quantity:            decimal.RequireFromString("0.001"),
-		QuoteOrderQty:       decimal.Zero,
-		ExecutedQuantity:    decimal.Zero,
-		CummulativeQuoteQty: decimal.Zero,
-		ClientOrderID:       "my_client_order_1",
-		TransactTime:        time.Now().UTC(), // Используем time.Time
-	}
-
-	// --- 2. Тест: Создание ордера (CreateOrder) ---
-	mockPool.EXPECT().
-		Exec(ctx, // SQL строка проверяется через gomock.Any() для простоты
-			gomock.Any(), // SQL
-			testOrder.InternalID,
-			testOrder.UserID,
-			testOrder.MexcOrderID,
-			testOrder.Symbol,
-			testOrder.Side,
-			testOrder.Type,
-			testOrder.Status,
-			testOrder.Price,
-			testOrder.Quantity,
-			testOrder.QuoteOrderQty,
-			testOrder.ExecutedQuantity,
-			testOrder.CummulativeQuoteQty,
-			testOrder.ClientOrderID,
-			testOrder.TransactTime,
-		).
-		DoAndReturn(func(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error) {
-			// Можно добавить более точную проверку SQL, если нужно
-			assert.Contains(t, sql, "INSERT INTO orders")
-			return pgconn.CommandTag{}, nil // Возвращаем успех
-		})
-
-	err := s.CreateOrder(ctx, testOrder)
-	// Проверяем результат
-	assert.NoError(t, err, "CreateOrder should not return an error")
-
+// OrderStorageTestSuite содержит все тесты для OrderStorage
+type OrderStorageTestSuite struct {
+	suite.Suite
+	ctrl         *gomock.Controller
+	mockDB       *mocks.MockDBInterface
+	orderStorage *OrderStorage
+	ctx          context.Context
 }
 
-func TestOrderStorage_SimpleFlow_PGXMock(t *testing.T) {
-	// --- 1. Настройка ---
-	// Создаем мок пула с помощью pgxmock
-	// pgxmock.PoolIface реализует интерфейс, похожий на pgxpool.Pool
-	mockPool, err := pgxmock.NewPool(pgxmock.MonitorPingsOption(true))
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer mockPool.Close() // Закрываем мок-соединение
+// SetupSuite вызывается один раз перед всеми тестами
+func (suite *OrderStorageTestSuite) SetupSuite() {
+	suite.ctx = context.Background()
+}
 
-	// Создаем экземпляр тестируемой реализации
-	orderStorage := NewOrderStorage(mockPool) // mockPool реализует storage.PgxPoolIface
+// SetupTest вызывается перед каждым тестом
+func (suite *OrderStorageTestSuite) SetupTest() {
+	suite.ctrl = gomock.NewController(suite.T())
+	suite.mockDB = mocks.NewMockDBInterface(suite.ctrl)
+	suite.orderStorage = NewOrderStorage(suite.mockDB)
+}
 
-	// Тестовые данные
-	ctx := context.Background()
-	testOrder := &domain.Order{
+// TearDownTest вызывается после каждого теста
+func (suite *OrderStorageTestSuite) TearDownTest() {
+	suite.ctrl.Finish()
+}
+
+// TestOrderStorage запускает все тесты
+func TestOrderStorage(t *testing.T) {
+	suite.Run(t, new(OrderStorageTestSuite))
+}
+
+// TestCreateOrder тестирует создание ордера
+func (suite *OrderStorageTestSuite) TestCreateOrder() {
+	order := &domain.Order{
 		InternalID:          123,
 		UserID:              1,
-		MexcOrderID:         "test_mexc_id_12345",
+		MexcOrderID:         "mexc_order_123",
 		Symbol:              "BTCUSDT",
 		Side:                "BUY",
 		Type:                "LIMIT",
 		Status:              "NEW",
-		Price:               decimal.RequireFromString("60000.0"),
-		Quantity:            decimal.RequireFromString("0.001"),
-		QuoteOrderQty:       decimal.Zero,
-		ExecutedQuantity:    decimal.Zero,
-		CummulativeQuoteQty: decimal.Zero,
-		ClientOrderID:       "my_client_order_1",
-		TransactTime:        time.Now().Truncate(time.Millisecond).UTC(),
+		Price:               decimal.NewFromFloat(50000.00),
+		Quantity:            decimal.NewFromFloat(0.001),
+		QuoteOrderQty:       decimal.NewFromFloat(50.00),
+		ExecutedQuantity:    decimal.NewFromFloat(0.000),
+		CummulativeQuoteQty: decimal.NewFromFloat(0.00),
+		ClientOrderID:       "client_123",
+		TransactTime:        time.Now(),
 	}
 
-	// --- 2. Тест: Создание ордера (CreateOrder) ---
-	// Ожидаем, что будет выполнен один INSERT
-	mockPool.ExpectExec("INSERT INTO orders").
-		WithArgs(
-			// Порядок аргументов должен строго соответствовать запросу в CreateOrder
-			testOrder.InternalID,
-			testOrder.UserID,
-			testOrder.MexcOrderID,
-			testOrder.Symbol,
-			testOrder.Side,
-			testOrder.Type,
-			testOrder.Status,
-			testOrder.Price,
-			testOrder.Quantity,
-			testOrder.QuoteOrderQty,
-			testOrder.ExecutedQuantity,
-			testOrder.CummulativeQuoteQty,
-			testOrder.ClientOrderID,
-			testOrder.TransactTime,
-		).
-		WillReturnResult(pgxmock.NewResult("INSERT", 1)) // 1 row affected
+	suite.Run("successful creation", func() {
+		suite.mockDB.EXPECT().
+			ExecContext(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil, nil)
 
-	// Выполняем тестируемую функцию
-	err = orderStorage.CreateOrder(ctx, testOrder)
-	// Проверяем результат
-	assert.NoError(t, err)
+		err := suite.orderStorage.CreateOrder(suite.ctx, order)
 
-	// Проверяем, что все ожидания были выполнены
-	assert.NoError(t, mockPool.ExpectationsWereMet())
+		assert.NoError(suite.T(), err)
+	})
 
-	// --- 3. Тест: Получение ордера (GetOrderByID) ---
-	// Ожидаем, что будет выполнен SELECT
-	rows := pgxmock.NewRows([]string{
-		"id", "internal_id", "user_id", "mexc_order_id", "symbol", "side", "type", "status",
-		"price", "quantity", "quote_order_qty", "executed_quantity",
-		"cummulative_quote_qty", "client_order_id", "transact_time",
-		"created_at", "updated_at",
-	}).AddRow(
-		uint64(1), testOrder.InternalID, testOrder.UserID, testOrder.MexcOrderID, testOrder.Symbol,
-		testOrder.Side, testOrder.Type, testOrder.Status,
-		testOrder.Price, testOrder.Quantity, testOrder.QuoteOrderQty,
-		testOrder.ExecutedQuantity, testOrder.CummulativeQuoteQty,
-		testOrder.ClientOrderID, testOrder.TransactTime,
-		time.Now(), time.Now(), // created_at, updated_at
-	)
+	suite.Run("database error", func() {
+		expectedError := errors.New("database connection failed")
 
-	mockPool.ExpectQuery("SELECT (.+) FROM orders WHERE mexc_order_id").
-		WithArgs(testOrder.MexcOrderID).
-		WillReturnRows(rows)
+		suite.mockDB.EXPECT().
+			ExecContext(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil, expectedError)
 
-	// Выполняем тестируемую функцию
-	retrievedOrder, err := orderStorage.GetOrderByID(ctx, testOrder.MexcOrderID)
-	// Проверяем результат
-	assert.NoError(t, err)
-	assert.NotNil(t, retrievedOrder)
-	if retrievedOrder != nil {
-		assert.Equal(t, testOrder.MexcOrderID, retrievedOrder.MexcOrderID)
-		assert.Equal(t, testOrder.Symbol, retrievedOrder.Symbol)
-		// ... другие проверки ...
-	}
+		err := suite.orderStorage.CreateOrder(suite.ctx, order)
 
-	// Проверяем, что все ожидания были выполнены
-	assert.NoError(t, mockPool.ExpectationsWereMet())
-
-	// --- 4. Тест: Удаление ордера (DeleteOrderByID) ---
-	// Ожидаем, что будет выполнен DELETE
-	mockPool.ExpectExec("DELETE FROM orders WHERE mexc_order_id").
-		WithArgs(testOrder.MexcOrderID).
-		WillReturnResult(pgxmock.NewResult("DELETE", 1)) // 1 row affected
-
-	// Выполняем тестируемую функцию
-	err = orderStorage.DeleteOrderByID(ctx, testOrder.MexcOrderID)
-	// Проверяем результат
-	assert.NoError(t, err)
-
-	// Проверяем, что все ожидания были выполнены
-	assert.NoError(t, mockPool.ExpectationsWereMet())
+		assert.Error(suite.T(), err)
+		assert.Contains(suite.T(), err.Error(), "failed to create order")
+	})
 }
 
-// TestOrderStorage_SimpleFlow тестирует простой сценарий: создать -> получить -> удалить.
-func TestOrderStorage_SimpleFlow(t *testing.T) {
-	// --- 1. Настройка ---
-	// Создаем мок пула с помощью pgxmock
-	mockPool, err := pgxmock.NewPool(pgxmock.MonitorPingsOption(true))
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer mockPool.Close()
+// TestDeleteOrderByID тестирует удаление ордера
+func (suite *OrderStorageTestSuite) TestDeleteOrderByID() {
+	mexcOrderID := "mexc_order_123"
 
-	// Создаем экземпляр тестируемой реализации
-	orderStorage := NewOrderStorage(mockPool)
+	suite.Run("successful deletion", func() {
+		mockResult := mocks.NewMockResult(suite.ctrl)
+		mockResult.EXPECT().RowsAffected().Return(int64(1), nil)
 
-	// Тестовые данные
-	ctx := context.Background()
-	testOrder := &domain.Order{
-		InternalID:          555,
-		UserID:              1,
-		MexcOrderID:         "test_mexc_id_12345",
-		Symbol:              "BTCUSDT",
-		Side:                "BUY",
-		Type:                "LIMIT",
-		Status:              "NEW",
-		Price:               decimal.RequireFromString("60000.0"),
-		Quantity:            decimal.RequireFromString("0.001"),
-		QuoteOrderQty:       decimal.Zero,
-		ExecutedQuantity:    decimal.Zero,
-		CummulativeQuoteQty: decimal.Zero,
-		ClientOrderID:       "my_client_order_1",
-		TransactTime:        time.Now().Truncate(time.Millisecond).UTC(),
-	}
+		suite.mockDB.EXPECT().
+			ExecContext(gomock.Any(), gomock.Any(), mexcOrderID).
+			Return(mockResult, nil)
 
-	// --- 2. Тест: Создание ордера (CreateOrder) ---
-	// Ожидаем, что будет выполнен один INSERT с определенными аргументами
-	mockPool.ExpectExec("INSERT INTO orders").
-		WithArgs(
-			// Порядок аргументов должен строго соответствовать запросу в CreateOrder
-			testOrder.InternalID,
-			testOrder.UserID,
-			testOrder.MexcOrderID,
-			testOrder.Symbol,
-			testOrder.Side,
-			testOrder.Type,
-			testOrder.Status,
-			testOrder.Price,
-			testOrder.Quantity,
-			testOrder.QuoteOrderQty,
-			testOrder.ExecutedQuantity,
-			testOrder.CummulativeQuoteQty,
-			testOrder.ClientOrderID,
-			testOrder.TransactTime,
-		).
-		WillReturnResult(pgxmock.NewResult("INSERT", 1)) // 1 row affected
+		err := suite.orderStorage.DeleteOrderByID(suite.ctx, mexcOrderID)
 
-	// Выполняем тестируемую функцию
-	err = orderStorage.CreateOrder(ctx, testOrder)
+		assert.NoError(suite.T(), err)
+	})
 
-	// Проверяем результат
-	assert.NoError(t, err)
+	suite.Run("order not found", func() {
+		mockResult := mocks.NewMockResult(suite.ctrl)
+		mockResult.EXPECT().RowsAffected().Return(int64(0), nil)
 
-	// Убедимся, что все ожидания от мока были выполнены
-	assert.NoError(t, mockPool.ExpectationsWereMet())
+		suite.mockDB.EXPECT().
+			ExecContext(gomock.Any(), gomock.Any(), mexcOrderID).
+			Return(mockResult, nil)
 
-	// --- 3. Тест: Получение ордера (GetOrderByID) ---
-	// Подготавливаем "фиктивный" результат для SELECT запроса
-	rows := pgxmock.NewRows([]string{
-		"id", "internal_id", "user_id", "mexc_order_id", "symbol", "side", "type", "status",
-		"price", "quantity", "quote_order_qty", "executed_quantity",
-		"cummulative_quote_qty", "client_order_id", "transact_time",
-		"created_at", "updated_at",
-	}).AddRow(
-		uint64(1), testOrder.InternalID, testOrder.UserID, testOrder.MexcOrderID, testOrder.Symbol,
-		testOrder.Side, testOrder.Type, testOrder.Status,
-		testOrder.Price, testOrder.Quantity, testOrder.QuoteOrderQty,
-		testOrder.ExecutedQuantity, testOrder.CummulativeQuoteQty,
-		testOrder.ClientOrderID, testOrder.TransactTime,
-		time.Now(), time.Now(), // created_at, updated_at
-	)
+		err := suite.orderStorage.DeleteOrderByID(suite.ctx, mexcOrderID)
 
-	// Ожидаем, что будет выполнен SELECT с определенным ID
-	mockPool.ExpectQuery("SELECT (.+) FROM orders WHERE mexc_order_id").
-		WithArgs(testOrder.MexcOrderID).
-		WillReturnRows(rows)
+		assert.Error(suite.T(), err)
+		assert.ErrorIs(suite.T(), err, postgreserr.ErrOrderNotFound)
+		assert.Contains(suite.T(), err.Error(), "order with id mexc_order_123 not found")
+	})
 
-	// Выполняем тестируемую функцию
-	retrievedOrder, err := orderStorage.GetOrderByID(ctx, testOrder.MexcOrderID)
+	suite.Run("database error", func() {
+		expectedError := errors.New("database connection failed")
 
-	// Проверяем результат
-	assert.NoError(t, err)
-	assert.NotNil(t, retrievedOrder)
-	// Проверяем ключевые поля
-	if retrievedOrder != nil {
-		assert.Equal(t, testOrder.MexcOrderID, retrievedOrder.MexcOrderID)
-		assert.Equal(t, testOrder.Symbol, retrievedOrder.Symbol)
-		// ... можно добавить больше проверок assert.Equal для других полей ...
-	}
+		suite.mockDB.EXPECT().
+			ExecContext(gomock.Any(), gomock.Any(), mexcOrderID).
+			Return(nil, expectedError)
 
-	// Убедимся, что все ожидания от мока были выполнены
-	assert.NoError(t, mockPool.ExpectationsWereMet())
+		err := suite.orderStorage.DeleteOrderByID(suite.ctx, mexcOrderID)
 
-	// --- 4. Тест: Удаление ордера (DeleteOrderByID) ---
-	// Ожидаем, что будет выполнен DELETE с определенным ID
-	mockPool.ExpectExec("DELETE FROM orders WHERE mexc_order_id").
-		WithArgs(testOrder.MexcOrderID).
-		WillReturnResult(pgxmock.NewResult("DELETE", 1)) // 1 row affected
+		assert.Error(suite.T(), err)
+		assert.Contains(suite.T(), err.Error(), "failed to delete order")
+	})
 
-	// Выполняем тестируемую функцию
-	err = orderStorage.DeleteOrderByID(ctx, testOrder.MexcOrderID)
+	suite.Run("rows affected error", func() {
+		mockResult := mocks.NewMockResult(suite.ctrl)
+		expectedError := errors.New("failed to get rows affected")
+		mockResult.EXPECT().RowsAffected().Return(int64(0), expectedError)
 
-	// Проверяем результат
-	assert.NoError(t, err)
+		suite.mockDB.EXPECT().
+			ExecContext(gomock.Any(), gomock.Any(), mexcOrderID).
+			Return(mockResult, nil)
 
-	// Убедимся, что все ожидания от мока были выполнены
-	assert.NoError(t, mockPool.ExpectationsWereMet())
+		err := suite.orderStorage.DeleteOrderByID(suite.ctx, mexcOrderID)
+
+		assert.Error(suite.T(), err)
+		assert.Contains(suite.T(), err.Error(), "failed to get rows affected")
+	})
+}
+
+// TestUpdateOrderStatus тестирует обновление статуса ордера
+func (suite *OrderStorageTestSuite) TestUpdateOrderStatus() {
+	mexcOrderID := "mexc_order_123"
+	status := "FILLED"
+
+	suite.Run("successful status update", func() {
+		mockResult := mocks.NewMockResult(suite.ctrl)
+		mockResult.EXPECT().RowsAffected().Return(int64(1), nil)
+
+		suite.mockDB.EXPECT().
+			ExecContext(gomock.Any(), gomock.Any(), status, mexcOrderID).
+			Return(mockResult, nil)
+
+		err := suite.orderStorage.UpdateOrderStatus(suite.ctx, mexcOrderID, status)
+
+		assert.NoError(suite.T(), err)
+	})
+
+	suite.Run("order not found", func() {
+		mockResult := mocks.NewMockResult(suite.ctrl)
+		mockResult.EXPECT().RowsAffected().Return(int64(0), nil)
+
+		suite.mockDB.EXPECT().
+			ExecContext(gomock.Any(), gomock.Any(), status, mexcOrderID).
+			Return(mockResult, nil)
+
+		err := suite.orderStorage.UpdateOrderStatus(suite.ctx, mexcOrderID, status)
+
+		assert.Error(suite.T(), err)
+		assert.ErrorIs(suite.T(), err, postgreserr.ErrOrderNotFound)
+		assert.Contains(suite.T(), err.Error(), "order with id mexc_order_123 not found")
+	})
+
+	suite.Run("database error", func() {
+		expectedError := errors.New("database connection failed")
+
+		suite.mockDB.EXPECT().
+			ExecContext(gomock.Any(), gomock.Any(), status, mexcOrderID).
+			Return(nil, expectedError)
+
+		err := suite.orderStorage.UpdateOrderStatus(suite.ctx, mexcOrderID, status)
+
+		assert.Error(suite.T(), err)
+		assert.Contains(suite.T(), err.Error(), "failed to update order status")
+	})
+
+	suite.Run("rows affected error", func() {
+		mockResult := mocks.NewMockResult(suite.ctrl)
+		expectedError := errors.New("failed to get rows affected")
+		mockResult.EXPECT().RowsAffected().Return(int64(0), expectedError)
+
+		suite.mockDB.EXPECT().
+			ExecContext(gomock.Any(), gomock.Any(), status, mexcOrderID).
+			Return(mockResult, nil)
+
+		err := suite.orderStorage.UpdateOrderStatus(suite.ctx, mexcOrderID, status)
+
+		assert.Error(suite.T(), err)
+		assert.Contains(suite.T(), err.Error(), "failed to get rows affected")
+	})
+}
+
+// TestGetOrderByID тестирует получение ордера по ID
+func (suite *OrderStorageTestSuite) TestGetOrderByID() {
+	mexcOrderID := "mexc_order_123"
+
+	suite.Run("successful retrieval", func() {
+		// Создаем мок для RowInterface
+		mockRow := mocks.NewMockRowInterface(suite.ctrl)
+		mockRow.EXPECT().
+			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(dest ...interface{}) error {
+				// Устанавливаем значения в dest
+				if len(dest) >= 1 {
+					if id, ok := dest[0].(*uint64); ok {
+						*id = 1
+					}
+				}
+				if len(dest) >= 2 {
+					if internalID, ok := dest[1].(*int64); ok {
+						*internalID = 123
+					}
+				}
+				if len(dest) >= 3 {
+					if userID, ok := dest[2].(*uint64); ok {
+						*userID = 1
+					}
+				}
+				if len(dest) >= 4 {
+					if mexcOrderID, ok := dest[3].(*string); ok {
+						*mexcOrderID = "mexc_order_123"
+					}
+				}
+				if len(dest) >= 5 {
+					if symbol, ok := dest[4].(*string); ok {
+						*symbol = "BTCUSDT"
+					}
+				}
+				if len(dest) >= 6 {
+					if side, ok := dest[5].(*string); ok {
+						*side = "BUY"
+					}
+				}
+				// Устанавливаем остальные поля...
+				return nil
+			})
+
+		suite.mockDB.EXPECT().
+			QueryRowContext(gomock.Any(), gomock.Any(), mexcOrderID).
+			Return(mockRow)
+
+		order, err := suite.orderStorage.GetOrderByID(suite.ctx, mexcOrderID)
+
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), order)
+		assert.Equal(suite.T(), mexcOrderID, order.MexcOrderID)
+		assert.Equal(suite.T(), "BTCUSDT", order.Symbol)
+		assert.Equal(suite.T(), "BUY", order.Side)
+	})
+
+	suite.Run("order not found", func() {
+		mockRow := mocks.NewMockRowInterface(suite.ctrl)
+		mockRow.EXPECT().
+			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(sql.ErrNoRows)
+
+		suite.mockDB.EXPECT().
+			QueryRowContext(gomock.Any(), gomock.Any(), mexcOrderID).
+			Return(mockRow)
+
+		order, err := suite.orderStorage.GetOrderByID(suite.ctx, mexcOrderID)
+
+		assert.Error(suite.T(), err)
+		assert.Nil(suite.T(), order)
+		assert.Contains(suite.T(), err.Error(), "order with id mexc_order_123 not found")
+	})
+
+	suite.Run("database error", func() {
+		expectedError := errors.New("database connection failed")
+		mockRow := mocks.NewMockRowInterface(suite.ctrl)
+		mockRow.EXPECT().
+			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(expectedError)
+
+		suite.mockDB.EXPECT().
+			QueryRowContext(gomock.Any(), gomock.Any(), mexcOrderID).
+			Return(mockRow)
+
+		order, err := suite.orderStorage.GetOrderByID(suite.ctx, mexcOrderID)
+
+		assert.Error(suite.T(), err)
+		assert.Nil(suite.T(), order)
+		assert.Contains(suite.T(), err.Error(), "failed to get order")
+	})
+}
+
+// TestNewOrderStorage тестирует создание нового экземпляра OrderStorage
+func (suite *OrderStorageTestSuite) TestNewOrderStorage() {
+	assert.NotNil(suite.T(), suite.orderStorage)
+	assert.Equal(suite.T(), suite.mockDB, suite.orderStorage.db)
+}
+
+// TestClose тестирует закрытие соединения
+func (suite *OrderStorageTestSuite) TestClose() {
+	suite.mockDB.EXPECT().Close().Return(nil)
+	suite.orderStorage.Close()
 }

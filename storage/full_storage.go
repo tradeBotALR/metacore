@@ -2,10 +2,14 @@ package storage
 
 import (
 	"context"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+	"database/sql"
 	"metacore/domain"
 )
+
+// RowInterface представляет интерфейс для sql.Row
+type RowInterface interface {
+	Scan(dest ...interface{}) error
+}
 
 type OrderStorage interface {
 	// CreateOrder сохраняет новый ордер в хранилище.
@@ -21,21 +25,55 @@ type OrderStorage interface {
 	GetOrderByID(ctx context.Context, mexcOrderID string) (*domain.Order, error)
 }
 
-// FullStorage объединяет все интерфейсы хранилища.
-// В дальнейшем сюда можно добавить UserStorage, TradeStorage и т.д.
-type FullStorage interface {
-	OrderStorage
+type UserStorage interface {
+	// CreateUser создает нового пользователя
+	CreateUser(ctx context.Context, user *domain.User) error
+
+	// GetUserByID получает пользователя по ID
+	GetUserByID(ctx context.Context, id uint64) (*domain.User, error)
+
+	// GetUserByMexcUID получает пользователя по MEXC UID
+	GetUserByMexcUID(ctx context.Context, mexcUID string) (*domain.User, error)
+
+	// UpdateUser обновляет пользователя
+	UpdateUser(ctx context.Context, user *domain.User) error
+
+	// DeleteUser удаляет пользователя
+	DeleteUser(ctx context.Context, id uint64) error
 }
 
-// PgxPoolIface определяет интерфейс для работы с пулом соединений,
-// который будет реализован *pgxpool.Pool.
+type TradeStorage interface {
+	// CreateTrade создает новую сделку
+	CreateTrade(ctx context.Context, trade *domain.Trade) error
+
+	// GetTradeByID получает сделку по MEXC Trade ID
+	GetTradeByID(ctx context.Context, mexcTradeID string) (*domain.Trade, error)
+}
+
+type BalanceStorage interface {
+	// UpdateBalance обновляет баланс пользователя
+	UpdateBalance(ctx context.Context, balance *domain.UserBalance) error
+
+	// GetBalance получает баланс пользователя по активу
+	GetBalance(ctx context.Context, userID uint64, asset string) (*domain.UserBalance, error)
+}
+
+// FullStorage объединяет все интерфейсы хранилища.
+type FullStorage interface {
+	UserStorage
+	OrderStorage
+	TradeStorage
+	BalanceStorage
+}
+
+// DBInterface определяет интерфейс для работы с базой данных,
+// который будет реализован *sql.DB.
 // Это позволяет легко мокать его в unit-тестах.
-type PgxPoolIface interface {
-	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
-	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
-	// Добавь другие методы, если они будут использоваться
-	// Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
-	// Begin(ctx context.Context) (pgx.Tx, error)
-	Ping(ctx context.Context) error
-	Close()
+type DBInterface interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) RowInterface
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+	PingContext(ctx context.Context) error
+	Close() error
 }
