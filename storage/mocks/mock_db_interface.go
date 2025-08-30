@@ -9,7 +9,7 @@ import (
 	"database/sql"
 	"reflect"
 
-	"metacore/storage"
+	"github.com/samar/sup_bot/metacore/storage"
 
 	gomock "github.com/golang/mock/gomock"
 )

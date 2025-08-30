@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"metacore/domain"
-	"metacore/postgres/postgreserr"
-	"metacore/storage"
+
+	"github.com/samar/sup_bot/metacore/domain"
+	"github.com/samar/sup_bot/metacore/postgres/postgreserr"
+	"github.com/samar/sup_bot/metacore/storage"
 )
 
 // OrderStorage реализует интерфейс OrderStorage.

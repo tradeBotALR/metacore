@@ -3,7 +3,8 @@ package storage
 import (
 	"context"
 	"database/sql"
-	"metacore/domain"
+
+	"github.com/samar/sup_bot/metacore/domain"
 )
 
 // RowInterface представляет интерфейс для sql.Row

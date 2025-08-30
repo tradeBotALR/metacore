@@ -1,0 +1,80 @@
+# Makefile для metacore как библиотеки
+
+.PHONY: help build test clean install vendor
+
+# Переменные
+BINARY_NAME=metacore
+MAIN_FILE=cmd/main.go
+BUILD_DIR=bin
+
+# Цвета для вывода
+GREEN=\033[32m
+YELLOW=\033[33m
+RED=\033[31m
+NC=\033[0m # No Color
+
+help: ## Показать справку
+	@echo "$(GREEN)Metacore Library - Доступные команды:$(NC)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+
+build: ## Собрать библиотеку
+	@echo "$(GREEN)🔨 Сборка metacore...$(NC)"
+	@mkdir -p $(BUILD_DIR)
+	go build -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_FILE)
+	@echo "$(GREEN)✅ Сборка завершена: $(BUILD_DIR)/$(BINARY_NAME)$(NC)"
+
+test: ## Запустить тесты
+	@echo "$(GREEN)🧪 Запуск тестов...$(NC)"
+	go test -v ./...
+	@echo "$(GREEN)✅ Тесты завершены$(NC)"
+
+test-coverage: ## Запустить тесты с покрытием
+	@echo "$(GREEN)🧪 Запуск тестов с покрытием...$(NC)"
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "$(GREEN)✅ Отчет о покрытии создан: coverage.html$(NC)"
+
+clean: ## Очистить сборки
+	@echo "$(YELLOW)🧹 Очистка...$(NC)"
+	@rm -rf $(BUILD_DIR)
+	@rm -f coverage.out coverage.html
+	@go clean
+	@echo "$(GREEN)✅ Очистка завершена$(NC)"
+
+install: ## Установить библиотеку локально
+	@echo "$(GREEN)📦 Установка metacore...$(NC)"
+	go install ./...
+	@echo "$(GREEN)✅ Установка завершена$(NC)"
+
+vendor: ## Обновить vendor
+	@echo "$(GREEN)📦 Обновление vendor...$(NC)"
+	go mod vendor
+	@echo "$(GREEN)✅ Vendor обновлен$(NC)"
+
+deps: ## Установить зависимости
+	@echo "$(GREEN)📦 Установка зависимостей...$(NC)"
+	go mod download
+	@echo "$(GREEN)✅ Зависимости установлены$(NC)"
+
+lint: ## Проверить код линтером
+	@echo "$(GREEN)🔍 Проверка кода...$(NC)"
+	golangci-lint run
+	@echo "$(GREEN)✅ Проверка завершена$(NC)"
+
+format: ## Форматировать код
+	@echo "$(GREEN)✨ Форматирование кода...$(NC)"
+	go fmt ./...
+	@echo "$(GREEN)✅ Форматирование завершено$(NC)"
+
+generate-mocks: ## Генерировать моки
+	@echo "$(GREEN)🎭 Генерация моков...$(NC)"
+	go generate ./...
+	@echo "$(GREEN)✅ Моки сгенерированы$(NC)"
+
+demo: ## Запустить демо
+	@echo "$(GREEN)🚀 Запуск демо...$(NC)"
+	go run $(MAIN_FILE)
+	@echo "$(GREEN)✅ Демо завершено$(NC)"
+
+# Команда по умолчанию
+.DEFAULT_GOAL := help
