@@ -1,4 +1,4 @@
-module metacore
+module github.com/samar/sup_bot/metacore
 
 go 1.24.1
 

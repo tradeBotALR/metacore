@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"metacore/configs"
-	"metacore/domain"
-	"metacore/postgres"
 	"time"
+
+	"github.com/samar/sup_bot/metacore/configs"
+	"github.com/samar/sup_bot/metacore/domain"
+	"github.com/samar/sup_bot/metacore/postgres"
 
 	"github.com/shopspring/decimal"
 )

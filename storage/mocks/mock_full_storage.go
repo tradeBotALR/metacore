@@ -8,7 +8,7 @@ import (
 	"context"
 	"reflect"
 
-	"metacore/domain"
+	"github.com/samar/sup_bot/metacore/domain"
 
 	gomock "github.com/golang/mock/gomock"
 )

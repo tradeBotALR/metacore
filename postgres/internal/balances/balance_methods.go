@@ -2,8 +2,9 @@ package balances
 
 import (
 	"context"
-	"metacore/domain"
-	"metacore/storage"
+
+	"github.com/samar/sup_bot/metacore/domain"
+	"github.com/samar/sup_bot/metacore/storage"
 )
 
 // BalanceStorage реализует интерфейс BalanceStorage.

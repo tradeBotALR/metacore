@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"metacore/configs"
+	"github.com/samar/sup_bot/metacore/configs"
 
 	_ "github.com/lib/pq"
 )

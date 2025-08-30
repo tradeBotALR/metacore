@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"metacore/domain"
-	"metacore/postgres/postgreserr"
-	"metacore/storage/mocks"
+	"github.com/samar/sup_bot/metacore/domain"
+	"github.com/samar/sup_bot/metacore/postgres/postgreserr"
+	"github.com/samar/sup_bot/metacore/storage/mocks"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"

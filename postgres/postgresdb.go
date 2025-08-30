@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"metacore/configs"
-	"metacore/postgres/internal/balances"
-	"metacore/postgres/internal/orders"
-	"metacore/postgres/internal/trades"
-	"metacore/postgres/internal/users"
-	"metacore/storage"
+
+	"github.com/samar/sup_bot/metacore/configs"
+	"github.com/samar/sup_bot/metacore/postgres/internal/balances"
+	"github.com/samar/sup_bot/metacore/postgres/internal/orders"
+	"github.com/samar/sup_bot/metacore/postgres/internal/trades"
+	"github.com/samar/sup_bot/metacore/postgres/internal/users"
+	"github.com/samar/sup_bot/metacore/storage"
 
 	_ "github.com/lib/pq"
 )

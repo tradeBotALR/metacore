@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"metacore/domain"
+	"github.com/samar/sup_bot/metacore/domain"
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
