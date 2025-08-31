@@ -20,6 +20,7 @@ import (
 type DB struct {
 	db *sql.DB
 	storage.FullStorage
+	UserStorage storage.UserStorage
 }
 
 // NewPostgresDB creates a new PostgreSQL connection
@@ -71,6 +72,7 @@ func NewPostgresDB(cfg configs.Config) (*DB, error) {
 	return &DB{
 		db:          db,
 		FullStorage: fullStorage,
+		UserStorage: userStorage,
 	}, nil
 }
 
@@ -79,6 +81,11 @@ func (db *DB) Close() {
 	if db.db != nil {
 		db.db.Close()
 	}
+}
+
+// GetUserStorage возвращает хранилище пользователей
+func (db *DB) GetUserStorage() storage.UserStorage {
+	return db.UserStorage
 }
 
 // Ping проверяет соединение

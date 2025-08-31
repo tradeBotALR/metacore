@@ -8,6 +8,7 @@ import (
 // Поля соответствуют таблице users в БД и API MEXC.
 type User struct {
 	ID              uint64     `db:"id"`
+	TelegramID      int64      `db:"telegram_id"`
 	MexcUID         string     `db:"mexc_uid"`
 	Username        string     `db:"username"`
 	Email           string     `db:"email"`

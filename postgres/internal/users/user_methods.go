@@ -25,14 +25,15 @@ func NewUserStorage(db storage.DBInterface) *UserStorage {
 func (s *UserStorage) CreateUser(ctx context.Context, user *domain.User) error {
 	query := `
 		INSERT INTO users (
-			mexc_uid, username, email, mexc_api_key, mexc_secret_key,
+			telegram_id, mexc_uid, username, email, mexc_api_key, mexc_secret_key,
 			kyc_status, can_trade, can_withdraw, can_deposit,
 			account_type, permissions, last_account_sync, is_active
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 		) RETURNING id, created_at, updated_at`
 
 	err := s.db.QueryRowContext(ctx, query,
+		user.TelegramID,
 		user.MexcUID,
 		user.Username,
 		user.Email,
@@ -58,7 +59,7 @@ func (s *UserStorage) CreateUser(ctx context.Context, user *domain.User) error {
 // GetUserByID получает пользователя по ID.
 func (s *UserStorage) GetUserByID(ctx context.Context, id uint64) (*domain.User, error) {
 	query := `
-		SELECT id, mexc_uid, username, email, mexc_api_key, mexc_secret_key,
+		SELECT id, telegram_id, mexc_uid, username, email, mexc_api_key, mexc_secret_key,
 		       kyc_status, can_trade, can_withdraw, can_deposit, account_type,
 		       permissions, last_account_sync, is_active, created_at, updated_at
 		FROM users WHERE id = $1`
@@ -67,6 +68,7 @@ func (s *UserStorage) GetUserByID(ctx context.Context, id uint64) (*domain.User,
 
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&user.ID,
+		&user.TelegramID,
 		&user.MexcUID,
 		&user.Username,
 		&user.Email,
@@ -97,7 +99,7 @@ func (s *UserStorage) GetUserByID(ctx context.Context, id uint64) (*domain.User,
 // GetUserByMexcUID получает пользователя по MEXC UID.
 func (s *UserStorage) GetUserByMexcUID(ctx context.Context, mexcUID string) (*domain.User, error) {
 	query := `
-		SELECT id, mexc_uid, username, email, mexc_api_key, mexc_secret_key,
+		SELECT id, telegram_id, mexc_uid, username, email, mexc_api_key, mexc_secret_key,
 		       kyc_status, can_trade, can_withdraw, can_deposit, account_type,
 		       permissions, last_account_sync, is_active, created_at, updated_at
 		FROM users WHERE mexc_uid = $1`
@@ -106,6 +108,7 @@ func (s *UserStorage) GetUserByMexcUID(ctx context.Context, mexcUID string) (*do
 
 	err := s.db.QueryRowContext(ctx, query, mexcUID).Scan(
 		&user.ID,
+		&user.TelegramID,
 		&user.MexcUID,
 		&user.Username,
 		&user.Email,
@@ -133,18 +136,59 @@ func (s *UserStorage) GetUserByMexcUID(ctx context.Context, mexcUID string) (*do
 	return &user, nil
 }
 
+// GetUserByTelegramID получает пользователя по Telegram ID.
+func (s *UserStorage) GetUserByTelegramID(ctx context.Context, telegramID int64) (*domain.User, error) {
+	query := `
+		SELECT id, telegram_id, mexc_uid, username, email, mexc_api_key, mexc_secret_key,
+		       kyc_status, can_trade, can_withdraw, can_deposit, account_type,
+		       permissions, last_account_sync, is_active, created_at, updated_at
+		FROM users WHERE telegram_id = $1`
+
+	var user domain.User
+
+	err := s.db.QueryRowContext(ctx, query, telegramID).Scan(
+		&user.ID,
+		&user.TelegramID,
+		&user.MexcUID,
+		&user.Username,
+		&user.Email,
+		&user.MexcAPIKey,
+		&user.MexcSecretKey,
+		&user.KYCStatus,
+		&user.CanTrade,
+		&user.CanWithdraw,
+		&user.CanDeposit,
+		&user.AccountType,
+		&user.Permissions,
+		&user.LastAccountSync,
+		&user.IsActive,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("user with telegram_id %d not found: %w", telegramID, postgreserr.ErrUserNotFound)
+		}
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	return &user, nil
+}
+
 // UpdateUser обновляет пользователя.
 func (s *UserStorage) UpdateUser(ctx context.Context, user *domain.User) error {
 	query := `
 		UPDATE users SET 
-			mexc_uid = $1, username = $2, email = $3, mexc_api_key = $4,
-			mexc_secret_key = $5, kyc_status = $6, can_trade = $7,
-			can_withdraw = $8, can_deposit = $9, account_type = $10,
-			permissions = $11, last_account_sync = $12, is_active = $13,
+			telegram_id = $1, mexc_uid = $2, username = $3, email = $4, mexc_api_key = $5,
+			mexc_secret_key = $6, kyc_status = $7, can_trade = $8,
+			can_withdraw = $9, can_deposit = $10, account_type = $11,
+			permissions = $12, last_account_sync = $13, is_active = $14,
 			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $14`
+		WHERE id = $15`
 
 	result, err := s.db.ExecContext(ctx, query,
+		user.TelegramID,
 		user.MexcUID,
 		user.Username,
 		user.Email,
