@@ -36,6 +36,9 @@ type UserStorage interface {
 	// GetUserByMexcUID получает пользователя по MEXC UID
 	GetUserByMexcUID(ctx context.Context, mexcUID string) (*domain.User, error)
 
+	// GetUserByTelegramID получает пользователя по Telegram ID
+	GetUserByTelegramID(ctx context.Context, telegramID int64) (*domain.User, error)
+
 	// UpdateUser обновляет пользователя
 	UpdateUser(ctx context.Context, user *domain.User) error
 
