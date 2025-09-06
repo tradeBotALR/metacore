@@ -41,7 +41,7 @@ gocritic:
 
 # Тесты
 test:
-	go test ./...
+	go test ./... -v -cover
 
 # Тесты только для UserStorage
 test-users:

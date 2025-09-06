@@ -8,6 +8,7 @@ import (
 
 	"github.com/samar/sup_bot/metacore/configs"
 	"github.com/samar/sup_bot/metacore/domain"
+	"github.com/samar/sup_bot/metacore/examples"
 	"github.com/samar/sup_bot/metacore/postgres"
 
 	"github.com/shopspring/decimal"
@@ -33,6 +34,11 @@ func main() {
 
 	// Демо-сценарий: Создание пользователя, ордера и баланса
 	runDemoScenario(ctx, db)
+
+	// Дополнительно: сценарий из examples, имитирующий работу сервера
+	if err := examples.RunOrderScenario(ctx, db); err != nil {
+		log.Printf("⚠️ Ошибка выполнения order-сценария: %v", err)
+	}
 }
 
 func runDemoScenario(ctx context.Context, db *postgres.DB) {
@@ -41,6 +47,7 @@ func runDemoScenario(ctx context.Context, db *postgres.DB) {
 	// 1. Создаем пользователя
 	fmt.Println("\n👤 1. Создание пользователя...")
 	user := &domain.User{
+		TelegramID:    123456789, // Добавляем Telegram ID
 		MexcUID:       "demo_user_123",
 		Username:      "demo_trader",
 		Email:         "demo@metacore.com",
@@ -60,7 +67,7 @@ func runDemoScenario(ctx context.Context, db *postgres.DB) {
 		log.Printf("⚠️ Ошибка создания пользователя: %v", err)
 	} else {
 		fmt.Printf("✅ Пользователь создан с ID: %d\n", user.ID)
-		fmt.Printf("   Username: %s, Email: %s\n", user.Username, user.Email)
+		fmt.Printf("   Telegram ID: %d, Username: %s, Email: %s\n", user.TelegramID, user.Username, user.Email)
 		fmt.Printf("   KYC Status: %d, Can Trade: %t\n", user.KYCStatus, user.CanTrade)
 	}
 
@@ -80,6 +87,27 @@ func runDemoScenario(ctx context.Context, db *postgres.DB) {
 		log.Printf("⚠️ Ошибка получения пользователя по UID: %v", err)
 	} else {
 		fmt.Printf("✅ Пользователь найден по UID: %s\n", retrievedUserByUID.Username)
+	}
+
+	// 3.1. Получаем пользователя по Telegram ID (новый метод)
+	fmt.Println("\n🔍 3.1. Получение пользователя по Telegram ID...")
+	retrievedUserByTelegram, err := db.GetUserByTelegramID(ctx, user.TelegramID)
+	if err != nil {
+		log.Printf("⚠️ Ошибка получения пользователя по Telegram ID: %v", err)
+	} else {
+		fmt.Printf("✅ Пользователь найден по Telegram ID: %s\n", retrievedUserByTelegram.Username)
+	}
+
+	// 3.2. Получаем всех пользователей (новый метод)
+	fmt.Println("\n🔍 3.2. Получение всех пользователей...")
+	allUsers, err := db.GetAllUsers(ctx)
+	if err != nil {
+		log.Printf("⚠️ Ошибка получения всех пользователей: %v", err)
+	} else {
+		fmt.Printf("✅ Найдено пользователей: %d\n", len(allUsers))
+		for i, u := range allUsers {
+			fmt.Printf("   %d. ID: %d, Username: %s, Telegram ID: %d\n", i+1, u.ID, u.Username, u.TelegramID)
+		}
 	}
 
 	// 4. Создаем ордер
@@ -160,14 +188,17 @@ func runDemoScenario(ctx context.Context, db *postgres.DB) {
 
 	// 9. Показываем финальную информацию
 	fmt.Println("\n📋 9. Финальная информация...")
-	fmt.Printf("   Пользователь ID: %d, Username: %s\n", user.ID, user.Username)
+	fmt.Printf("   Пользователь ID: %d, Username: %s, Telegram ID: %d\n", user.ID, user.Username, user.TelegramID)
 	fmt.Printf("   Ордер ID: %s, Symbol: %s, Status: %s\n", order.MexcOrderID, order.Symbol, order.Status)
 	fmt.Printf("   Баланс: %s %s (Free: %s, Locked: %s)\n", balance.Free.Add(balance.Locked).String(), balance.Asset, balance.Free.String(), balance.Locked.String())
 
 	fmt.Println("\n🎉 Демо-сценарий завершен успешно!")
 	fmt.Println("   Все основные операции выполнены:")
-	fmt.Println("   ✅ Создание пользователя")
-	fmt.Println("   ✅ Получение пользователя")
+	fmt.Println("   ✅ Создание пользователя (с Telegram ID)")
+	fmt.Println("   ✅ Получение пользователя по ID")
+	fmt.Println("   ✅ Получение пользователя по MEXC UID")
+	fmt.Println("   ✅ Получение пользователя по Telegram ID")
+	fmt.Println("   ✅ Получение всех пользователей")
 	fmt.Println("   ✅ Создание ордера")
 	fmt.Println("   ✅ Получение ордера")
 	fmt.Println("   ✅ Обновление статуса ордера")
