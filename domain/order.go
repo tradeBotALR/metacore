@@ -1,8 +1,9 @@
 package domain
 
 import (
-	"github.com/shopspring/decimal"
 	"time"
+
+	"github.com/shopspring/decimal"
 ) // Для точной работы с финансами
 
 // Order представляет собой ордер в системе.
@@ -25,4 +26,16 @@ type Order struct {
 	TransactTime        time.Time       `db:"transact_time"`   // Unix timestamp в миллисекундах из API
 	CreatedAt           time.Time       `db:"created_at"`      // Можно добавить, если нужно в коде
 	UpdatedAt           time.Time       `db:"updated_at"`      // Можно добавить, если нужно в коде
+}
+
+// OrderUpdate представляет запись истории изменения статуса ордера.
+type OrderUpdate struct {
+	ID                  uint64          `db:"id"`
+	UserID              uint64          `db:"user_id"`
+	OrderID             string          `db:"order_id"`
+	Status              string          `db:"status"`
+	ExecutedQuantity    decimal.Decimal `db:"executed_quantity"`
+	CummulativeQuoteQty decimal.Decimal `db:"cummulative_quote_qty"`
+	UpdateTime          time.Time       `db:"update_time"`
+	RawData             []byte          `db:"raw_data"`
 }

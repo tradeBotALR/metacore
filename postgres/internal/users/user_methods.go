@@ -242,6 +242,58 @@ func (s *UserStorage) DeleteUser(ctx context.Context, id uint64) error {
 	return nil
 }
 
+// GetAllUsers получает всех пользователей.
+func (s *UserStorage) GetAllUsers(ctx context.Context) ([]*domain.User, error) {
+	query := `
+		SELECT id, telegram_id, mexc_uid, username, email, mexc_api_key, mexc_secret_key,
+		       kyc_status, can_trade, can_withdraw, can_deposit, account_type,
+		       permissions, last_account_sync, is_active, created_at, updated_at
+		FROM users ORDER BY id`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*domain.User
+
+	for rows.Next() {
+		var user domain.User
+		err := rows.Scan(
+			&user.ID,
+			&user.TelegramID,
+			&user.MexcUID,
+			&user.Username,
+			&user.Email,
+			&user.MexcAPIKey,
+			&user.MexcSecretKey,
+			&user.KYCStatus,
+			&user.CanTrade,
+			&user.CanWithdraw,
+			&user.CanDeposit,
+			&user.AccountType,
+			&user.Permissions,
+			&user.LastAccountSync,
+			&user.IsActive,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan user: %w", err)
+		}
+
+		users = append(users, &user)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over users: %w", err)
+	}
+
+	return users, nil
+}
+
 // Close закрывает соединение с БД.
 func (s *UserStorage) Close() {
 	if s.db != nil {

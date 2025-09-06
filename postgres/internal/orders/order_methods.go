@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/samar/sup_bot/metacore/domain"
 	"github.com/samar/sup_bot/metacore/postgres/postgreserr"
@@ -140,6 +141,160 @@ func (s *OrderStorage) GetOrderByID(ctx context.Context, mexcOrderID string) (*d
 	}
 
 	return &order, nil
+}
+
+// GetUserOrders получает ордера пользователя с фильтрами
+func (s *OrderStorage) GetUserOrders(ctx context.Context, userID uint64, filters ...storage.OrderFilter) ([]*domain.Order, error) {
+	var filter storage.OrderFilter
+	if len(filters) > 0 {
+		filter = filters[0]
+	}
+
+	b := &strings.Builder{}
+	b.WriteString(`SELECT id, internal_id, user_id, mexc_order_id, symbol, side, type, status,
+price, quantity, quote_order_qty, executed_quantity, cummulative_quote_qty, client_order_id, transact_time, created_at, updated_at
+FROM orders WHERE user_id = $1`)
+	args := []interface{}{userID}
+	idx := 1
+
+	if filter.Symbol != "" {
+		idx++
+		b.WriteString(fmt.Sprintf(" AND symbol = $%d", idx))
+		args = append(args, filter.Symbol)
+	}
+	if filter.Status != "" {
+		idx++
+		b.WriteString(fmt.Sprintf(" AND status = $%d", idx))
+		args = append(args, filter.Status)
+	}
+	if filter.StartTime != nil {
+		idx++
+		b.WriteString(fmt.Sprintf(" AND transact_time >= $%d", idx))
+		args = append(args, *filter.StartTime)
+	}
+	if filter.EndTime != nil {
+		idx++
+		b.WriteString(fmt.Sprintf(" AND transact_time <= $%d", idx))
+		args = append(args, *filter.EndTime)
+	}
+	b.WriteString(" ORDER BY created_at DESC, id DESC")
+	if filter.Limit > 0 {
+		idx++
+		b.WriteString(fmt.Sprintf(" LIMIT $%d", idx))
+		args = append(args, filter.Limit)
+	}
+	if filter.Offset > 0 {
+		idx++
+		b.WriteString(fmt.Sprintf(" OFFSET $%d", idx))
+		args = append(args, filter.Offset)
+	}
+
+	rows, err := s.db.QueryContext(ctx, b.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query orders: %w", err)
+	}
+	defer rows.Close()
+
+	var orders []*domain.Order
+	for rows.Next() {
+		var o domain.Order
+		if err := rows.Scan(
+			&o.ID, &o.InternalID, &o.UserID, &o.MexcOrderID, &o.Symbol, &o.Side, &o.Type, &o.Status,
+			&o.Price, &o.Quantity, &o.QuoteOrderQty, &o.ExecutedQuantity, &o.CummulativeQuoteQty, &o.ClientOrderID,
+			&o.TransactTime, &o.CreatedAt, &o.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan order: %w", err)
+		}
+		orders = append(orders, &o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("orders rows error: %w", err)
+	}
+	return orders, nil
+}
+
+// GetOpenOrders получает активные ордера пользователя
+func (s *OrderStorage) GetOpenOrders(ctx context.Context, userID uint64, symbol string) ([]*domain.Order, error) {
+	b := &strings.Builder{}
+	b.WriteString(`SELECT id, internal_id, user_id, mexc_order_id, symbol, side, type, status,
+price, quantity, quote_order_qty, executed_quantity, cummulative_quote_qty, client_order_id, transact_time, created_at, updated_at
+FROM orders WHERE user_id = $1 AND status IN ('NEW','PARTIALLY_FILLED')`)
+	args := []interface{}{userID}
+	if symbol != "" {
+		b.WriteString(" AND symbol = $2")
+		args = append(args, symbol)
+	}
+	b.WriteString(" ORDER BY created_at DESC, id DESC")
+
+	rows, err := s.db.QueryContext(ctx, b.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query open orders: %w", err)
+	}
+	defer rows.Close()
+
+	var orders []*domain.Order
+	for rows.Next() {
+		var o domain.Order
+		if err := rows.Scan(
+			&o.ID, &o.InternalID, &o.UserID, &o.MexcOrderID, &o.Symbol, &o.Side, &o.Type, &o.Status,
+			&o.Price, &o.Quantity, &o.QuoteOrderQty, &o.ExecutedQuantity, &o.CummulativeQuoteQty, &o.ClientOrderID,
+			&o.TransactTime, &o.CreatedAt, &o.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan open order: %w", err)
+		}
+		orders = append(orders, &o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("open orders rows error: %w", err)
+	}
+	return orders, nil
+}
+
+// --- Order updates ---
+
+type OrderUpdateStorageImpl struct {
+	db storage.DBInterface
+}
+
+func NewOrderUpdateStorage(db storage.DBInterface) *OrderUpdateStorageImpl {
+	return &OrderUpdateStorageImpl{db: db}
+}
+
+func (s *OrderUpdateStorageImpl) AppendOrderUpdate(ctx context.Context, update *domain.OrderUpdate) error {
+	query := `INSERT INTO order_updates (user_id, order_id, status, executed_quantity, cummulative_quote_qty, update_time, raw_data)
+VALUES ($1,$2,$3,$4,$5,$6,$7)`
+	_, err := s.db.ExecContext(ctx, query,
+		update.UserID, update.OrderID, update.Status,
+		update.ExecutedQuantity, update.CummulativeQuoteQty,
+		update.UpdateTime, update.RawData,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to append order update: %w", err)
+	}
+	return nil
+}
+
+func (s *OrderUpdateStorageImpl) GetOrderUpdates(ctx context.Context, userID uint64, orderID string) ([]*domain.OrderUpdate, error) {
+	query := `SELECT id, user_id, order_id, status, executed_quantity, cummulative_quote_qty, update_time, raw_data
+FROM order_updates WHERE user_id = $1 AND order_id = $2 ORDER BY update_time DESC, id DESC`
+	rows, err := s.db.QueryContext(ctx, query, userID, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query order updates: %w", err)
+	}
+	defer rows.Close()
+
+	var updates []*domain.OrderUpdate
+	for rows.Next() {
+		u := &domain.OrderUpdate{}
+		if err := rows.Scan(&u.ID, &u.UserID, &u.OrderID, &u.Status, &u.ExecutedQuantity, &u.CummulativeQuoteQty, &u.UpdateTime, &u.RawData); err != nil {
+			return nil, fmt.Errorf("failed to scan order update: %w", err)
+		}
+		updates = append(updates, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("order updates rows error: %w", err)
+	}
+	return updates, nil
 }
 
 // Close закрывает соединение с БД.

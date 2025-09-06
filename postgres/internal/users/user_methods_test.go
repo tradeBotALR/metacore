@@ -128,7 +128,7 @@ func (suite *UserStorageTestSuite) TestGetUserByID() {
 		// Создаем мок для RowInterface
 		mockRow := mocks.NewMockRowInterface(suite.ctrl)
 		mockRow.EXPECT().
-			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(dest ...interface{}) error {
 				// Устанавливаем значения в dest
 				if len(dest) >= 1 {
@@ -137,17 +137,22 @@ func (suite *UserStorageTestSuite) TestGetUserByID() {
 					}
 				}
 				if len(dest) >= 2 {
-					if mexcUID, ok := dest[1].(*string); ok {
-						*mexcUID = "test_uid_123"
+					if telegramID, ok := dest[1].(*int64); ok {
+						*telegramID = 123456789
 					}
 				}
 				if len(dest) >= 3 {
-					if username, ok := dest[2].(*string); ok {
-						*username = "testuser"
+					if mexcUID, ok := dest[2].(*string); ok {
+						*mexcUID = "test_uid_123"
 					}
 				}
 				if len(dest) >= 4 {
-					if email, ok := dest[3].(*string); ok {
+					if username, ok := dest[3].(*string); ok {
+						*username = "testuser"
+					}
+				}
+				if len(dest) >= 5 {
+					if email, ok := dest[4].(*string); ok {
 						*email = "test@example.com"
 					}
 				}
@@ -171,7 +176,7 @@ func (suite *UserStorageTestSuite) TestGetUserByID() {
 	suite.Run("user not found", func() {
 		mockRow := mocks.NewMockRowInterface(suite.ctrl)
 		mockRow.EXPECT().
-			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(sql.ErrNoRows)
 
 		suite.mockDB.EXPECT().
@@ -189,7 +194,7 @@ func (suite *UserStorageTestSuite) TestGetUserByID() {
 		expectedError := errors.New("database connection failed")
 		mockRow := mocks.NewMockRowInterface(suite.ctrl)
 		mockRow.EXPECT().
-			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(expectedError)
 
 		suite.mockDB.EXPECT().
@@ -212,7 +217,7 @@ func (suite *UserStorageTestSuite) TestGetUserByMexcUID() {
 		// Создаем мок для RowInterface
 		mockRow := mocks.NewMockRowInterface(suite.ctrl)
 		mockRow.EXPECT().
-			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(dest ...interface{}) error {
 				// Устанавливаем значения в dest
 				if len(dest) >= 1 {
@@ -221,12 +226,17 @@ func (suite *UserStorageTestSuite) TestGetUserByMexcUID() {
 					}
 				}
 				if len(dest) >= 2 {
-					if mexcUID, ok := dest[1].(*string); ok {
-						*mexcUID = "test_uid_123"
+					if telegramID, ok := dest[1].(*int64); ok {
+						*telegramID = 123456789
 					}
 				}
 				if len(dest) >= 3 {
-					if username, ok := dest[2].(*string); ok {
+					if mexcUID, ok := dest[2].(*string); ok {
+						*mexcUID = "test_uid_123"
+					}
+				}
+				if len(dest) >= 4 {
+					if username, ok := dest[3].(*string); ok {
 						*username = "testuser"
 					}
 				}
@@ -249,7 +259,7 @@ func (suite *UserStorageTestSuite) TestGetUserByMexcUID() {
 	suite.Run("user not found", func() {
 		mockRow := mocks.NewMockRowInterface(suite.ctrl)
 		mockRow.EXPECT().
-			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(sql.ErrNoRows)
 
 		suite.mockDB.EXPECT().
@@ -397,6 +407,85 @@ func (suite *UserStorageTestSuite) TestDeleteUser() {
 
 		assert.Error(suite.T(), err)
 		assert.Contains(suite.T(), err.Error(), "failed to get rows affected")
+	})
+}
+
+// TestGetUserByTelegramID тестирует получение пользователя по Telegram ID
+func (suite *UserStorageTestSuite) TestGetUserByTelegramID() {
+	telegramID := int64(123456789)
+
+	suite.Run("successful retrieval", func() {
+		mockRow := mocks.NewMockRowInterface(suite.ctrl)
+		mockRow.EXPECT().
+			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(dest ...interface{}) error {
+				if len(dest) >= 1 {
+					if id, ok := dest[0].(*uint64); ok {
+						*id = 1
+					}
+				}
+				if len(dest) >= 2 {
+					if telegramID, ok := dest[1].(*int64); ok {
+						*telegramID = 123456789
+					}
+				}
+				if len(dest) >= 3 {
+					if mexcUID, ok := dest[2].(*string); ok {
+						*mexcUID = "test_uid_123"
+					}
+				}
+				if len(dest) >= 4 {
+					if username, ok := dest[3].(*string); ok {
+						*username = "testuser"
+					}
+				}
+				return nil
+			})
+
+		suite.mockDB.EXPECT().
+			QueryRowContext(gomock.Any(), gomock.Any(), telegramID).
+			Return(mockRow)
+
+		user, err := suite.userStorage.GetUserByTelegramID(suite.ctx, telegramID)
+
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), user)
+		assert.Equal(suite.T(), telegramID, user.TelegramID)
+		assert.Equal(suite.T(), "testuser", user.Username)
+	})
+
+	suite.Run("user not found", func() {
+		mockRow := mocks.NewMockRowInterface(suite.ctrl)
+		mockRow.EXPECT().
+			Scan(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(sql.ErrNoRows)
+
+		suite.mockDB.EXPECT().
+			QueryRowContext(gomock.Any(), gomock.Any(), telegramID).
+			Return(mockRow)
+
+		user, err := suite.userStorage.GetUserByTelegramID(suite.ctx, telegramID)
+
+		assert.Error(suite.T(), err)
+		assert.Nil(suite.T(), user)
+		assert.Contains(suite.T(), err.Error(), "user with telegram_id 123456789 not found")
+	})
+}
+
+// TestGetAllUsers тестирует получение всех пользователей
+func (suite *UserStorageTestSuite) TestGetAllUsers() {
+	suite.Run("database error", func() {
+		expectedError := errors.New("database connection failed")
+
+		suite.mockDB.EXPECT().
+			QueryContext(gomock.Any(), gomock.Any()).
+			Return(nil, expectedError)
+
+		users, err := suite.userStorage.GetAllUsers(suite.ctx)
+
+		assert.Error(suite.T(), err)
+		assert.Nil(suite.T(), users)
+		assert.Contains(suite.T(), err.Error(), "failed to query users")
 	})
 }
 

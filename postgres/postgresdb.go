@@ -58,15 +58,17 @@ func NewPostgresDB(cfg configs.Config) (*DB, error) {
 	dbAdapter := storage.NewDBAdapter(db)
 	orderStorage := orders.NewOrderStorage(dbAdapter)
 	userStorage := users.NewUserStorage(dbAdapter)
-	tradeStorage := trades.NewTradeStorage()
-	balanceStorage := balances.NewBalanceStorage()
+	tradeStorage := trades.NewTradeStorage(dbAdapter)
+	balanceStorage := balances.NewBalanceStorage(dbAdapter)
+	orderUpdateStorage := orders.NewOrderUpdateStorage(dbAdapter)
 
 	// Создаем FullStorage, объединяющий все storage
 	fullStorage := &fullStorage{
-		UserStorage:    userStorage,
-		OrderStorage:   orderStorage,
-		TradeStorage:   tradeStorage,
-		BalanceStorage: balanceStorage,
+		UserStorage:        userStorage,
+		OrderStorage:       orderStorage,
+		TradeStorage:       tradeStorage,
+		BalanceStorage:     balanceStorage,
+		OrderUpdateStorage: orderUpdateStorage,
 	}
 
 	return &DB{
@@ -99,6 +101,7 @@ type fullStorage struct {
 	storage.OrderStorage
 	storage.TradeStorage
 	storage.BalanceStorage
+	storage.OrderUpdateStorage
 }
 
 // Ensure fullStorage implements FullStorage interface
